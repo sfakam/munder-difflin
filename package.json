@@ -12,6 +12,9 @@
   },
   "scripts": {
     "dev": "electron-vite dev",
+    "dev:remote": "MUNDER_REMOTE=${MUNDER_REMOTE:-ws://localhost:3456} electron-vite dev --config electron.vite.config.ts -- out/main/remote-entry.js",
+    "server:build": "tsc -p tsconfig.server.json",
+    "server": "npm run server:build && node out/server/server/index.js",
     "build": "electron-vite build && npm run copy:main-assets",
     "copy:main-assets": "node tools/copy-main-assets.cjs",
     "preview": "electron-vite preview",
@@ -58,6 +61,7 @@
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "tunnelmole": "^2.4.0",
+    "ws": "^8.18.0",
     "zustand": "^4.5.5"
   },
   "devDependencies": {
@@ -66,6 +70,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/localtunnel": "^2.0.4",
     "@types/node": "^22.7.5",
+    "@types/ws": "^8.5.13",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.2",
