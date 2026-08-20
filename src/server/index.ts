@@ -557,10 +557,11 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   const bootCfg = readConfig();
   if (bootCfg.onboardingComplete && bootCfg.harnessHome) {
     const claudePath = process.env.CLAUDE_PATH ?? 'claude';
-    console.log(`[server] auto-spawning god agent (${claudePath}) in ${bootCfg.harnessHome}`);
+    const claudeArgs = ['--dangerously-skip-permissions'];
+    console.log(`[server] auto-spawning god agent (${claudePath} ${claudeArgs.join(' ')}) in ${bootCfg.harnessHome}`);
     const cwd = bootCfg.harnessHome as string;
     try {
-      const p = nodePty.spawn(claudePath, [], {
+      const p = nodePty.spawn(claudePath, claudeArgs, {
         name: 'xterm-256color',
         cols: 100,
         rows: 30,
