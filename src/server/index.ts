@@ -361,11 +361,75 @@ handle('control:snapshot', () => ({}));
 // Skills stubs (return empty — client shows no catalog in server mode)
 handle('skills:catalog', () => []);
 handle('skills:local', () => []);
+handle('skills:install', () => ({ ok: false, error: 'not supported in server mode' }));
+handle('skills:uninstall', () => ({ ok: false, error: 'not supported in server mode' }));
+handle('skills:reveal', () => ({ ok: false }));
 
 // Slack stubs (slack runs on Mac client, not VM)
 handle('slack:status', () => ({ running: false }));
 handle('slack:start', () => ({ ok: false, error: 'slack runs on the Mac client' }));
 handle('slack:stop', () => ({ ok: true }));
+handle('slack:reply', () => ({ ok: false }));
+handle('slack:setConfig', () => ({ ok: true }));
+handle('slack:replyScriptPath', () => null);
+
+// Realtime stubs
+handle('realtime:hasKey', () => ({ hasKey: false }));
+handle('realtime:mintToken', () => ({ ok: false, error: 'not supported in server mode' }));
+handle('realtime:setSessionLive', () => ({ ok: true }));
+
+// Update stubs (no auto-update on VM server)
+handle('update:current', () => ({ version: '0.0.0', channel: 'stable' }));
+handle('update:status', () => ({ state: 'idle' }));
+handle('update:checkNow', () => ({ ok: true }));
+
+// Hire stubs
+handle('hire:drainPending', () => ({ pending: [] }));
+handle('hire:import', () => ({ ok: false, error: 'not supported in server mode' }));
+handle('hire:openFile', () => ({ ok: false }));
+
+// Hive memory/knowledge stubs
+handle('hive:memoryStatus', () => ({ enabled: false, chunks: 0 }));
+handle('hive:memoryWakeUp', () => ({ ok: true }));
+
+// Integrations / webhooks stubs
+handle('integrations:templates', () => []);
+handle('webhook:start', () => ({ ok: false, error: 'not supported in server mode' }));
+handle('webhook:stop', () => ({ ok: true }));
+handle('webhook:status', () => ({ running: false }));
+handle('webhook:setConfig', () => ({ ok: true }));
+handle('webhooks:list', () => []);
+handle('webhooks:save', () => ({ ok: true }));
+handle('webhooks:delete', () => ({ ok: true }));
+handle('webhooks:status', () => ({ running: false }));
+handle('webhooks:generateSecret', () => ({ secret: '' }));
+handle('triggers:getContext', () => null);
+handle('triggers:setContext', () => ({ ok: true }));
+handle('org:getTrigger', () => null);
+handle('org:setTrigger', () => ({ ok: true }));
+handle('missions:save', () => ({ ok: true }));
+handle('github:issues', () => []);
+handle('github:ciRuns', () => []);
+handle('tools:status', () => ({}));
+handle('hero:payload', () => null);
+handle('app:resetAll', () => ({ ok: true }));
+handle('app:setLoginItem', () => ({ ok: true }));
+handle('app:setNotifications', () => ({ ok: true }));
+handle('dialog:chooseFolder', () => null);
+handle('dialog:attachFiles', () => ({ ok: false, files: [] }));
+handle('providerKey:has', () => ({ has: false }));
+handle('providerKey:set', () => ({ ok: true }));
+handle('providerKey:clear', () => ({ ok: true }));
+handle('control:breakerState', () => ({}));
+handle('control:setBreakerState', () => ({ ok: true }));
+handle('control:snapshot', () => null);
+handle('control:steer', () => ({ ok: true }));
+handle('control:pause', () => ({ ok: true }));
+handle('control:resume', () => ({ ok: true }));
+handle('control:halt', () => ({ ok: true }));
+handle('control:approvalRequest', () => null);
+handle('control:autoDelivery', () => ({ ok: true }));
+handle('control:gateTool', () => ({ ok: true }));
 
 // Webex poller
 handle('webex-poll:status', () => ({ running: webexPoller?.isRunning() ?? false }));
