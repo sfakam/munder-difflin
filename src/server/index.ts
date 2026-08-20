@@ -365,8 +365,21 @@ handle('webex-poll:setConfig', ([patch]) => {
   if (typeof p.pollIntervalMs === 'number') next.webexPollIntervalMs = p.pollIntervalMs;
   if (typeof p.enabled === 'boolean') next.webexPollEnabled = p.enabled;
   writeConfig(next);
-  if (!next.webexPollEnabled) { webexPoller?.stop(); webexPoller = null; }
-  else if (webexPoller) webexPoller.updateConfig({ botToken: next.webexPollBotToken as string, roomId: next.webexPollRoomId as string });
+  if (!next.webexPollEnabled) {
+    webexPoller?.stop(); webexPoller = null;
+  } else if (webexPoller) {
+    webexPoller.updateConfig({ botToken: next.webexPollBotToken as string, roomId: next.webexPollRoomId as string });
+  } else if (next.webexPollBotToken) {
+    // poller wasn't running but is now enabled — start it
+    const cfg = readConfig();
+    webexPoller = new WebexPoller({
+      botToken: cfg.webexPollBotToken as string,
+      roomId: cfg.webexPollRoomId as string | undefined,
+      pollIntervalMs: cfg.webexPollIntervalMs as number | undefined,
+      onMessage: (m) => broadcast('webex-poll:incomingMessage', m),
+    });
+    void webexPoller.start();
+  }
   return { ok: true };
 });
 
