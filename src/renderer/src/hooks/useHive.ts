@@ -835,18 +835,6 @@ export function useHive(config: HarnessConfig | null): void {
     return () => { unsub(); if (debounce) clearTimeout(debounce); clearInterval(iv); };
   }, [config?.onboardingComplete]);
 
-  // 5a-webex) Pipe inbound Webex messages into Michael's queue — same pattern as Slack.
-  useEffect(() => {
-    if (!config?.onboardingComplete) return;
-    return window.cth.onWebexPollMessage?.((msg) => {
-      if (!msg?.text?.trim()) return;
-      const text = msg.text.trim();
-      useStore.getState().enqueueMessage(GOD_ID, `[Webex from ${msg.personEmail}]: ${text}`);
-      // Immediate ack back to the sender
-      void window.cth.webexPollReply?.({ roomId: msg.roomId, text: '⏳ Received — your request has been queued.' });
-    });
-  }, [config?.onboardingComplete]);
-
   // 5) Pipe inbound Slack messages into Michael's queue. The main-process Slack
   //    webhook server pushes each verified message here via IPC; enqueueing to
   //    GOD_ID lands it in Michael's queue exactly as if the user had typed it
