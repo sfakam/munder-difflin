@@ -215,13 +215,16 @@ handle('hive:message', ([msg]) => {
   const ts = new Date().toISOString().replace(/[:.]/g, '-');
   const id = `${ts}-${randomBytes(3).toString('hex')}`;
   const full: Record<string, unknown> = {
+    ...m,
     id, conversation: `conv-${randomBytes(3).toString('hex')}`,
-    in_reply_to: null, from: m.from ?? 'server',
-    to: dest, act: m.act ?? 'inform',
-    subject: m.subject ?? '', body: m.body ?? '',
+    in_reply_to: (m as Record<string, unknown>).in_reply_to ?? null,
+    from: m.from ?? 'server',
+    to: dest,
+    act: m.act ?? 'inform',
+    subject: m.subject ?? '',
+    body: m.body ?? '',
     hops: 0, requires_reply: false, needs_human: false,
     created_at: new Date().toISOString(),
-    ...m,
   };
   atomicWrite(join(inboxDir, `${id}.json`), JSON.stringify(full, null, 2));
   appendFileSync(hiveFile('log.jsonl'), JSON.stringify({
