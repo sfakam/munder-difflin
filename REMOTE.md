@@ -112,20 +112,24 @@ npm install
 
 ### 3. Connect to the VM
 
-**Option A — Direct connection** (VM port 3456 open to the internet):
+> **Important:** always use `npm run dev:remote`, not `npm run dev`.
+> `dev:remote` boots `remote-entry.js` which proxies all IPC over WebSocket.
+> `npm run dev` starts the full local Electron process and ignores `MUNDER_REMOTE`.
+
+**Option A — Direct connection** (VM port 3456 open to the corporate/internal network):
 
 ```bash
-MUNDER_REMOTE=ws://YOUR_VM_IP:3456 npm run dev
+MUNDER_REMOTE=ws://YOUR_VM_HOSTNAME:3456 npm run dev:remote
 ```
 
 **Option B — SSH tunnel** (recommended; no firewall changes needed):
 
 ```bash
 # In a separate terminal, keep this running:
-ssh -N -L 3456:localhost:3456 user@your-vm-ip
+ssh -N -L 3456:localhost:3456 user@your-vm-hostname
 
 # Then start the app pointing at the local tunnel:
-MUNDER_REMOTE=ws://localhost:3456 npm run dev
+MUNDER_REMOTE=ws://localhost:3456 npm run dev:remote
 ```
 
 **Option C — Add to your shell profile** so you never have to type it:
@@ -133,6 +137,8 @@ MUNDER_REMOTE=ws://localhost:3456 npm run dev
 ```bash
 # ~/.zshrc or ~/.bashrc
 export MUNDER_REMOTE=ws://localhost:3456
+# then just:
+npm run dev:remote
 ```
 
 The Electron window opens on your Mac. All agent terminals, hive coordination,
