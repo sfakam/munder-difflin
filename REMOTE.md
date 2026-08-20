@@ -81,11 +81,26 @@ sudo iptables -A INPUT -p tcp --dport 3456 -j ACCEPT
 ### 1. Prerequisites
 
 - **Node.js 18+** and npm
-- **Xcode Command Line Tools** (for node-pty)
+- **Xcode Command Line Tools** (for node-pty / better-sqlite3)
   ```bash
   xcode-select --install
   ```
 - Same repo cloned locally
+
+#### macOS 26+ — SDK header fix
+
+macOS 26 moved the public C++ stdlib headers into the SDK directory. Native
+addons built with `node-gyp` won't find them unless you add the SDK to the
+include path. Add the following to your `~/.zshrc` (or `~/.bashrc`):
+
+```bash
+export SDK=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+export SDKROOT="$SDK"
+export CPLUS_INCLUDE_PATH="$SDK/usr/include/c++/v1:$SDK/usr/include"
+export CPATH="$SDK/usr/include"
+```
+
+Then reload your shell (`source ~/.zshrc`) before running `npm install`.
 
 ### 2. Clone and install
 
