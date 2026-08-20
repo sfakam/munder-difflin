@@ -44,7 +44,7 @@ function writeConfig(patch: Record<string, unknown>): void {
 }
 
 // ─── PTY manager ────────────────────────────────────────────────────────────
-interface PtyEntry { pty: nodePty.IPty; id: string; }
+interface PtyEntry { pty: nodePty.IPty; id: string; cwd: string; command: string; }
 const ptys = new Map<string, PtyEntry>();
 let ptySeq = 0;
 
@@ -91,25 +91,32 @@ handle('config:update', ([patch]) => {
 // PTY
 handle('pty:spawn', ([opts], push) => {
   const o = (opts ?? {}) as {
-    cmd?: string; args?: string[]; cwd?: string;
-    cols?: number; rows?: number; env?: Record<string, string>;
+    id?: string; command?: string; cmd?: string; args?: string[];
+    cwd?: string; cols?: number; rows?: number; env?: Record<string, string>;
   };
-  const id = `pty-${++ptySeq}`;
-  const shell = o.cmd ?? (process.platform === 'win32' ? 'cmd.exe' : (process.env.SHELL ?? 'bash'));
-  const p = nodePty.spawn(shell, o.args ?? [], {
-    name: 'xterm-256color',
-    cols: o.cols ?? 80,
-    rows: o.rows ?? 24,
-    cwd: o.cwd ?? HARNESS_HOME,
-    env: { ...process.env, ...(o.env ?? {}) } as Record<string, string>,
-  });
-  p.onData((data) => push(`pty:data:${id}`, data));
-  p.onExit((e) => {
-    push(`pty:exit:${id}`, e);
-    ptys.delete(id);
-  });
-  ptys.set(id, { pty: p, id });
-  return { id };
+  const id = o.id ?? `pty-${++ptySeq}`;
+  const cwd = o.cwd ?? HARNESS_HOME;
+  // command (preferred) or cmd (legacy), fallback to shell
+  const exe = o.command ?? o.cmd ?? (process.platform === 'win32' ? 'cmd.exe' : (process.env.SHELL ?? 'bash'));
+  try {
+    const p = nodePty.spawn(exe, o.args ?? [], {
+      name: 'xterm-256color',
+      cols: o.cols ?? 80,
+      rows: o.rows ?? 24,
+      cwd,
+      env: { ...process.env, ...(o.env ?? {}) } as Record<string, string>,
+    });
+    p.onData((data) => push(`pty:data:${id}`, data));
+    p.onExit((e) => {
+      push(`pty:exit:${id}`, e);
+      ptys.delete(id);
+    });
+    ptys.set(id, { pty: p, id, cwd, command: exe });
+    return { ok: true, id, cwd };
+  } catch (err) {
+    console.error('[server] pty:spawn failed:', (err as Error).message);
+    return { ok: false, error: (err as Error).message };
+  }
 });
 
 handle('pty:write', ([id, data]) => {
@@ -122,7 +129,11 @@ handle('pty:kill', ([id]) => {
   const e = ptys.get(id as string);
   if (e) { try { e.pty.kill(); } catch { /* noop */ } ptys.delete(id as string); }
 });
-handle('pty:list', () => Array.from(ptys.keys()));
+handle('pty:list', () =>
+  Array.from(ptys.values()).map(({ id, cwd, command }) => ({
+    id, cwd, command, pid: 0, lastOutputAt: Date.now(), hasOutput: true,
+  }))
+);
 handle('pty:redraw', () => { /* no-op in server mode */ });
 
 // Hive — tasks
