@@ -37,10 +37,12 @@ function send(msg: object) {
 /** Send an invoke to the server and await its result. */
 function invoke(channel: string, args: unknown[]): Promise<unknown> {
   return new Promise((resolve, reject) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      return reject(new Error(`not connected: ${channel}`));
+    }
     const id = `${++msgSeq}`;
     pending.set(id, { resolve, reject });
     send({ type: 'invoke', id, channel, args });
-    // 30 s timeout per call
     setTimeout(() => {
       if (pending.has(id)) {
         pending.delete(id);
