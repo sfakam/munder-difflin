@@ -323,6 +323,16 @@ export interface HarnessConfig {
    *  thread) or an agent's own direct in-thread reply — those always stay on. */
   slackProactivePosting?: boolean;
 
+  // ─── Webex Poller (poll-based, no webhook required) ────────────────────────
+  /** Master toggle for the Webex → Michael's-queue polling integration. */
+  webexPollEnabled?: boolean;
+  /** Webex bot token (Bearer …). Never logged. */
+  webexPollBotToken?: string;
+  /** Restrict ingestion to one room id; empty/undefined = all rooms the bot is in. */
+  webexPollRoomId?: string;
+  /** Polling interval in ms. Defaults to 5 000. */
+  webexPollIntervalMs?: number;
+
   // ─── Free Flow (voice dictation → message queue) ───────────────────────────
   /** Master toggle for Free Flow push-to-talk dictation. Default OFF: with it off
    *  the composer shows no mic button, no getUserMedia runs, and no Groq call is
@@ -436,6 +446,10 @@ const DEFAULTS: HarnessConfig = {
   slackChannelId: undefined,
   slackPort: undefined,
   slackProactivePosting: false,
+  webexPollEnabled: false,
+  webexPollBotToken: undefined,
+  webexPollRoomId: undefined,
+  webexPollIntervalMs: undefined,
   freeflowEnabled: true,
   groqApiKey: undefined,
   freeflowModel: 'whisper-large-v3-turbo',

@@ -1122,6 +1122,31 @@ const api = {
   }): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('slack:setConfig', patch),
 
+  // ─── Webex Poller (poll-based, no webhook required) ──────────────────────────
+  /** Subscribe to inbound Webex messages. Returns an unsubscribe function. */
+  onWebexPollMessage: (cb: (msg: { text: string; roomId: string; messageId: string; personEmail: string; isMention: boolean; isGroup: boolean }) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, msg: { text: string; roomId: string; messageId: string; personEmail: string; isMention: boolean; isGroup: boolean }) => cb(msg);
+    ipcRenderer.on('webex-poll:incomingMessage', listener);
+    return () => ipcRenderer.removeListener('webex-poll:incomingMessage', listener);
+  },
+  /** Start the Webex poller. */
+  webexPollStart: (): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('webex-poll:start'),
+  /** Stop the Webex poller. */
+  webexPollStop: (): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('webex-poll:stop'),
+  /** Current poller state. */
+  webexPollStatus: (): Promise<{ running: boolean }> =>
+    ipcRenderer.invoke('webex-poll:status'),
+  /** Post a message to a Webex room (bot token stays in main). */
+  webexPollReply: (m: { roomId: string; text: string }): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('webex-poll:reply', m),
+  /** Persist Webex Poller settings. */
+  webexPollSetConfig: (patch: {
+    botToken?: string; roomId?: string; pollIntervalMs?: number; enabled?: boolean;
+  }): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('webex-poll:setConfig', patch),
+
   // ─── Generic webhook + status API (POST → work, GET → status) ────────────────
   /** Start the generic webhook server; returns the public endpoint URL callers
    *  POST to (secret-gated) and GET a token's status from. */

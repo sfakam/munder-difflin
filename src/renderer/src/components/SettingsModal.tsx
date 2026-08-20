@@ -153,6 +153,133 @@ function clearLocalState(): void {
   } catch { /* noop */ }
 }
 
+/** Self-contained Webex Poller settings block — mirrors the Slack section. */
+function WebexPollSection() {
+  const [enabled, setEnabled] = useState(false);
+  const [botToken, setBotToken] = useState('');
+  const [roomId, setRoomId] = useState('');
+  const [running, setRunning] = useState(false);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    window.cth.getConfig().then((cfg) => {
+      setEnabled(cfg.webexPollEnabled ?? false);
+      setBotToken(cfg.webexPollBotToken ?? '');
+      setRoomId(cfg.webexPollRoomId ?? '');
+    });
+    window.cth.webexPollStatus().then((s) => setRunning(s.running));
+  }, []);
+
+  const saveConfig = async (nextEnabled: boolean) => {
+    await window.cth.webexPollSetConfig({ botToken, roomId: roomId || undefined, enabled: nextEnabled });
+  };
+
+  const handleToggle = async () => {
+    const next = !enabled;
+    setEnabled(next);
+    await saveConfig(next);
+    if (next && botToken) {
+      setBusy(true);
+      setNote('');
+      const r = await window.cth.webexPollStart();
+      setRunning(r.ok);
+      setNote(r.ok ? 'Polling started.' : (r.error ?? 'Failed to start.'));
+      setBusy(false);
+    } else if (!next) {
+      await window.cth.webexPollStop();
+      setRunning(false);
+      setNote('');
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{
+        fontFamily: 'var(--cth-font-display)', fontSize: 8, lineHeight: '12px',
+        color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 2
+      }}>
+        Webex Poller
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 13, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
+            Webex Poller
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>
+            Poll Webex for messages — no webhook or public URL needed.
+          </span>
+        </div>
+        <PixelButton
+          variant={enabled ? 'primary' : 'secondary'}
+          size="sm"
+          onClick={handleToggle}
+          disabled={busy}
+        >
+          {enabled ? 'on' : 'off'}
+        </PixelButton>
+      </div>
+
+      {enabled && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingLeft: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={slackLabelStyle}>Bot token</span>
+            <input
+              type="password"
+              placeholder="Bearer token from developer.webex.com"
+              value={botToken}
+              onChange={(e) => setBotToken(e.target.value)}
+              onBlur={() => saveConfig(enabled)}
+              style={slackInputStyle}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={slackLabelStyle}>Room ID (optional — leave blank to monitor all rooms)</span>
+            <input
+              placeholder="Y2lzY29zcGFyazovL…"
+              value={roomId}
+              onChange={(e) => setRoomId(e.target.value)}
+              onBlur={() => saveConfig(enabled)}
+              style={slackInputStyle}
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <PixelButton
+              variant={running ? 'secondary' : 'primary'}
+              size="sm"
+              disabled={busy || !botToken}
+              onClick={async () => {
+                setBusy(true);
+                setNote('');
+                if (running) {
+                  await window.cth.webexPollStop();
+                  setRunning(false);
+                  setNote('Stopped.');
+                } else {
+                  const r = await window.cth.webexPollStart();
+                  setRunning(r.ok);
+                  setNote(r.ok ? 'Polling started.' : (r.error ?? 'Failed to start.'));
+                }
+                setBusy(false);
+              }}
+            >
+              {running ? 'Stop' : 'Start'}
+            </PixelButton>
+            <span style={{ fontSize: 11, color: running ? 'var(--cth-green-500, #4ade80)' : 'var(--cth-ink-500)' }}>
+              {running ? 'polling' : 'stopped'}
+            </span>
+            {note && <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>{note}</span>}
+          </div>
+          <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
+            Create a bot at <strong>developer.webex.com</strong>, copy its token, and invite it to
+            the rooms you want monitored. The poller checks for new messages every 5 seconds.
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // v0.3.4 redesign: six tabs, one topic each. 'AI Engines' folded into
 // Agents & Models; MCP + Slack + webhook + REST live together in Connections;
 // voice gets its own tab; Danger Zone became a red row at the bottom of General.
@@ -1473,6 +1600,11 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
                           </div>
                         )}
                       </div>
+
+                      <div style={{ height: 2, background: 'var(--cth-ink-300)' }} />
+
+                      {/* Webex Poller */}
+                      <WebexPollSection />
 
                       <div style={{ height: 2, background: 'var(--cth-ink-300)' }} />
 

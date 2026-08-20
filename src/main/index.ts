@@ -34,6 +34,7 @@ import { PersistStore } from './db';
 import { readAgentUsage, readContextTokens, seedSessionTranscript, resolveSessionCwd } from './transcript';
 import { listIssues, listCIRuns } from './github';
 import { SlackWebhookServer, SlackReplyServer, postSlackReply, type SlackEventFile } from './slack';
+import { WebexPoller, postWebexMessage, type WebexInboundMessage } from './webex-poller';
 import {
   WebhookServer,
   type WebhookDispatch, type WebhookEndpointRef, type WebhookInbound, type WebhookTaskStatus
@@ -1578,6 +1579,42 @@ function stopSlackServer(): void {
   try { if (existsSync(slackReplyConfigPath())) unlinkSync(slackReplyConfigPath()); } catch { /* noop */ }
 }
 
+// ─── Webex Poller (poll-based, no webhook required) ──────────────────────────
+let webexPoller: WebexPoller | null = null;
+
+async function startWebexPoller(): Promise<{ ok: boolean; error?: string }> {
+  const cfg = readConfig();
+  if (!cfg.webexPollEnabled || !cfg.webexPollBotToken) {
+    return { ok: false, error: 'webex-poll disabled or missing bot token' };
+  }
+  webexPoller?.stop();
+  webexPoller = new WebexPoller({
+    botToken: cfg.webexPollBotToken,
+    roomId: cfg.webexPollRoomId,
+    pollIntervalMs: cfg.webexPollIntervalMs,
+    onMessage: (m: WebexInboundMessage) => {
+      try {
+        liveWebContents()?.send('webex-poll:incomingMessage', {
+          text: m.text,
+          roomId: m.roomId,
+          messageId: m.messageId,
+          personEmail: m.personEmail,
+          isMention: m.isMention,
+          isGroup: m.isGroup,
+        });
+      } catch { /* window torn down */ }
+    },
+  });
+  const res = await webexPoller.start();
+  if (!res.ok) { webexPoller = null; }
+  return res;
+}
+
+function stopWebexPoller(): void {
+  try { webexPoller?.stop(); } catch (e) { console.error('[webex-poll] stop failed:', e); }
+  webexPoller = null;
+}
+
 // ─── Generic inbound webhook + status API (multi-endpoint) ───────────────────
 /** The running generic-webhook server, or null when disabled/stopped. A PUBLIC
  *  (tunnel-forwarded) surface — secret-gated, unlike the loopback /reply. ONE
@@ -2981,6 +3018,7 @@ ipcMain.handle('config:changeHome', async (_evt, payload: unknown) => {
   try { hive.stopRouter(); } catch (e) { console.error('[changeHome] stopRouter:', e); }
   try { hookServer.stop(); } catch (e) { console.error('[changeHome] hookServer.stop:', e); }
   try { stopSlackServer(); } catch (e) { console.error('[changeHome] slack.stop:', e); }
+  try { stopWebexPoller(); } catch (e) { console.error('[changeHome] webex-poll.stop:', e); }
   try { stopWebhookServer(); } catch (e) { console.error('[changeHome] webhook.stop:', e); }
   try { memory.stop(); } catch (e) { console.error('[changeHome] memory.stop:', e); }
   try { reflector.stop(); } catch (e) { console.error('[changeHome] reflector.stop:', e); }
@@ -3005,6 +3043,7 @@ ipcMain.handle('config:changeHome', async (_evt, payload: unknown) => {
       bootstrapHiveServices();
       const cfg = readConfig();
       if (cfg.slackEnabled && cfg.slackSigningSecret) void startSlackServer();
+      if (cfg.webexPollEnabled && cfg.webexPollBotToken) void startWebexPoller();
       reconcileWebhookServer();
       return { ok: false, error: `Could not copy data: ${e instanceof Error ? e.message : String(e)}` };
     }
@@ -3419,6 +3458,7 @@ function teardownAndQuit(): void {
   try { hookServer.stop(); } catch (e) { console.error('[quit] hookServer.stop:', e); }
   try { telemetry.stop(); } catch (e) { console.error('[quit] telemetry.stop:', e); }
   try { stopSlackServer(); } catch (e) { console.error('[quit] slack.stop:', e); }
+  try { stopWebexPoller(); } catch (e) { console.error('[quit] webex-poll.stop:', e); }
   try { stopWebhookServer(); } catch (e) { console.error('[quit] webhook.stop:', e); }
   try { memory.stop(); } catch (e) { console.error('[quit] memory.stop:', e); }
   try { reflector.stop(); } catch (e) { console.error('[quit] reflector.stop:', e); }
@@ -3476,6 +3516,7 @@ ipcMain.handle('app:resetAll', () => {
   try { hookServer.stop(); } catch (e) { console.error('[reset] hookServer.stop:', e); }
   try { telemetry.stop(); } catch (e) { console.error('[reset] telemetry.stop:', e); }
   try { stopSlackServer(); } catch (e) { console.error('[reset] slack.stop:', e); }
+  try { stopWebexPoller(); } catch (e) { console.error('[reset] webex-poll.stop:', e); }
   try { memory.stop(); } catch (e) { console.error('[reset] memory.stop:', e); }
   try { reflector.stop(); } catch (e) { console.error('[reset] reflector.stop:', e); }
   try { persist.close(); } catch (e) { console.error('[reset] persist.close:', e); }
@@ -3762,6 +3803,35 @@ ipcMain.handle('slack:setConfig', (_evt, patch: unknown) => {
   // to fetch the fresh (ephemeral) tunnel URL.
   const cfg = readConfig();
   if (!cfg.slackEnabled || !cfg.slackSigningSecret) stopSlackServer();
+  return { ok: true };
+});
+
+// ─── IPC: Webex Poller ───────────────────────────────────────────────────────
+ipcMain.handle('webex-poll:start', () => startWebexPoller());
+ipcMain.handle('webex-poll:stop', () => { stopWebexPoller(); return { ok: true }; });
+ipcMain.handle('webex-poll:status', () => ({ running: webexPoller?.isRunning() ?? false }));
+ipcMain.handle('webex-poll:reply', (_evt, arg: unknown) => {
+  const m = (arg ?? {}) as { roomId?: unknown; text?: unknown };
+  const roomId = typeof m.roomId === 'string' ? m.roomId.trim() : '';
+  const text = typeof m.text === 'string' ? m.text.trim() : '';
+  const botToken = readConfig().webexPollBotToken ?? '';
+  if (!botToken || !roomId || !text) return { ok: false, error: 'missing botToken, roomId, or text' };
+  return postWebexMessage({ botToken, roomId, text });
+});
+ipcMain.handle('webex-poll:setConfig', (_evt, patch: unknown) => {
+  const p = (patch ?? {}) as {
+    botToken?: unknown; roomId?: unknown; pollIntervalMs?: unknown; enabled?: unknown;
+  };
+  const next: Partial<HarnessConfig> = {};
+  if (typeof p.botToken === 'string') next.webexPollBotToken = p.botToken.trim() || undefined;
+  if (typeof p.roomId === 'string') next.webexPollRoomId = p.roomId.trim() || undefined;
+  if (typeof p.pollIntervalMs === 'number' && Number.isFinite(p.pollIntervalMs))
+    next.webexPollIntervalMs = Math.max(1000, p.pollIntervalMs);
+  if (typeof p.enabled === 'boolean') next.webexPollEnabled = p.enabled;
+  writeConfig(next);
+  const cfg = readConfig();
+  if (!cfg.webexPollEnabled || !cfg.webexPollBotToken) stopWebexPoller();
+  else if (webexPoller) webexPoller.updateConfig({ botToken: cfg.webexPollBotToken, roomId: cfg.webexPollRoomId, pollIntervalMs: cfg.webexPollIntervalMs });
   return { ok: true };
 });
 
@@ -4776,6 +4846,12 @@ app.whenReady().then(() => {
     void startSlackServer().then((r) => {
       if (!r.ok) console.error('[slack] auto-start failed:', r.error);
       else console.log('[slack] webhook listening', r.url ? `(tunnel: ${r.url})` : '(no tunnel)');
+    });
+  }
+  if (slackCfg.webexPollEnabled && slackCfg.webexPollBotToken) {
+    void startWebexPoller().then((r) => {
+      if (!r.ok) console.error('[webex-poll] auto-start failed:', r.error);
+      else console.log('[webex-poll] polling started');
     });
   }
   // Auto-start the generic webhook only for endpoints the user has explicitly
