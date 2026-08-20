@@ -153,7 +153,14 @@ handle('hive:deleteTask', ([id]) => {
 
 // Hive — roster / registry
 handle('roster:readSync', () => {
-  return readJson<unknown[]>(hiveFile('registry.json'), []);
+  const raw = readJson<{ agents?: unknown[]; archived?: unknown[]; restorable?: unknown[] }>(
+    hiveFile('registry.json'), {}
+  );
+  return {
+    agents: Array.isArray(raw.agents) ? raw.agents : [],
+    archived: Array.isArray(raw.archived) ? raw.archived : [],
+    restorable: Array.isArray(raw.restorable) ? raw.restorable : [],
+  };
 });
 handle('roster:write', ([roster]) => {
   writeJson(hiveFile('registry.json'), roster);
