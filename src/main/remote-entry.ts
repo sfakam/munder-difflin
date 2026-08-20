@@ -108,7 +108,7 @@ const PROXY_CHANNELS: string[] = [
   'hive:memoryStatus', 'hive:memoryWakeUp', 'hive:hookEvent',
   'hive:agentSpawned', 'hive:agentArchived', 'hive:contextUpdate',
   // Fleet / roster / workers
-  'fleet:get', 'roster:readSync', 'roster:write', 'workers:list', 'workers:stop',
+  'fleet:get', 'roster:write', 'workers:list', 'workers:stop',
   // Session / history
   'session:resolveCwd', 'history:list', 'history:add', 'history:search',
   // Filesystem / git
@@ -152,9 +152,11 @@ const PROXY_CHANNELS: string[] = [
   'tools:status', 'hero:payload',
 ];
 
+// Channels the renderer calls via ipcRenderer.sendSync() — need ipcMain.on + event.returnValue
+const SYNC_CHANNELS = ['roster:readSync'];
+
 function registerProxies() {
   for (const channel of PROXY_CHANNELS) {
-    // Guard against double-registration (electron throws)
     try {
       ipcMain.handle(channel, async (_evt, ...args: unknown[]) => {
         try { return await invoke(channel, args); }
@@ -166,6 +168,15 @@ function registerProxies() {
     } catch {
       // channel already registered — skip
     }
+  }
+
+  // Sync channels: renderer blocks waiting for event.returnValue
+  for (const channel of SYNC_CHANNELS) {
+    ipcMain.on(channel, (event, ...args: unknown[]) => {
+      invoke(channel, args)
+        .then((result) => { event.returnValue = result ?? null; })
+        .catch(() => { event.returnValue = null; });
+    });
   }
 
   // app:openExternal is fire-and-forget on Mac
