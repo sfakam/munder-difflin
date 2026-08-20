@@ -96,7 +96,7 @@ function connectWS() {
  */
 const PROXY_CHANNELS: string[] = [
   // App
-  'app:info', 'app:copyToClipboard', 'app:readClipboard', 'app:openExternal',
+  'app:info', 'app:copyToClipboard', 'app:readClipboard',
   // Config
   'config:get', 'config:update', 'config:ensureHome', 'config:changeHome',
   // PTY
@@ -146,7 +146,7 @@ const PROXY_CHANNELS: string[] = [
   // Provider keys
   'providerKey:has', 'providerKey:set', 'providerKey:clear',
   // Misc
-  'app:info', 'app:resetAll', 'app:setLoginItem', 'app:setNotifications',
+  'app:resetAll', 'app:setLoginItem', 'app:setNotifications',
   'update:current', 'update:status', 'update:checkNow',
   'dialog:chooseFolder', 'dialog:attachFiles',
   'tools:status', 'hero:payload',
