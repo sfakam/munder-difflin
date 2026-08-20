@@ -50,6 +50,34 @@ let ptySeq = 0;
 
 // ─── Webex poller ────────────────────────────────────────────────────────────
 let webexPoller: WebexPoller | null = null;
+const GOD_PTY_ID = 'pty-__god__';
+
+/** Route an inbound Webex message server-side: write to the god PTY directly
+ *  (no roundtrip through the Mac client) and broadcast for UI updates. */
+function handleWebexMessage(m: { text: string; roomId: string; personEmail: string }) {
+  // 1. Broadcast to any connected clients so the UI can show the message
+  broadcast('webex-poll:incomingMessage', m);
+
+  // 2. Write directly to the god PTY — no client required
+  const godPty = ptys.get(GOD_PTY_ID);
+  if (godPty) {
+    const prompt = `[Webex from ${m.personEmail}]: ${m.text}\r`;
+    godPty.pty.write(prompt);
+    console.log(`[server] webex message delivered to god PTY: ${m.text.slice(0, 60)}`);
+  } else {
+    console.warn('[server] webex message received but god PTY is not running — message dropped');
+  }
+
+  // 3. Ack the sender
+  const cfg = readConfig();
+  if (cfg.webexPollBotToken) {
+    void postWebexMessage({
+      botToken: cfg.webexPollBotToken as string,
+      roomId: m.roomId,
+      text: '⏳ Received — queued for the agent.',
+    });
+  }
+}
 
 // ─── Handler registry ────────────────────────────────────────────────────────
 type PushFn = (channel: string, data: unknown) => void;
@@ -339,7 +367,7 @@ handle('slack:stop', () => ({ ok: true }));
 
 // Webex poller
 handle('webex-poll:status', () => ({ running: webexPoller?.isRunning() ?? false }));
-handle('webex-poll:start', (_, push) => {
+handle('webex-poll:start', () => {
   const cfg = readConfig();
   if (!cfg.webexPollEnabled || !cfg.webexPollBotToken) return { ok: false, error: 'disabled or missing token' };
   webexPoller?.stop();
@@ -347,7 +375,7 @@ handle('webex-poll:start', (_, push) => {
     botToken: cfg.webexPollBotToken as string,
     roomId: cfg.webexPollRoomId as string | undefined,
     pollIntervalMs: cfg.webexPollIntervalMs as number | undefined,
-    onMessage: (m) => push('webex-poll:incomingMessage', m),
+    onMessage: handleWebexMessage,
   });
   return webexPoller.start();
 });
@@ -376,7 +404,7 @@ handle('webex-poll:setConfig', ([patch]) => {
       botToken: cfg.webexPollBotToken as string,
       roomId: cfg.webexPollRoomId as string | undefined,
       pollIntervalMs: cfg.webexPollIntervalMs as number | undefined,
-      onMessage: (m) => broadcast('webex-poll:incomingMessage', m),
+      onMessage: handleWebexMessage,
     });
     void webexPoller.start();
   }
@@ -445,7 +473,7 @@ if (cfg.webexPollEnabled && cfg.webexPollBotToken) {
     botToken: cfg.webexPollBotToken as string,
     roomId: cfg.webexPollRoomId as string | undefined,
     pollIntervalMs: cfg.webexPollIntervalMs as number | undefined,
-    onMessage: (m) => broadcast('webex-poll:incomingMessage', m),
+    onMessage: handleWebexMessage,
   });
   webexPoller.start().then((r) => {
     if (!r.ok) console.error('[server] webex-poll auto-start failed:', r.error);
