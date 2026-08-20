@@ -61,8 +61,10 @@ function handleWebexMessage(m: { text: string; roomId: string; personEmail: stri
   // 2. Write directly to the god PTY — no client required
   const godPty = ptys.get(GOD_PTY_ID);
   if (godPty) {
-    const prompt = `[Webex from ${m.personEmail}]: ${m.text}\r`;
-    godPty.pty.write(prompt);
+    const line = `[Webex from ${m.personEmail}]: ${m.text}`;
+    godPty.pty.write(line);
+    // Small delay so the terminal registers the text before Enter is sent
+    setTimeout(() => godPty.pty.write('\r'), 120);
     console.log(`[server] webex message delivered to god PTY: ${m.text.slice(0, 60)}`);
   } else {
     console.warn('[server] webex message received but god PTY is not running — message dropped');
