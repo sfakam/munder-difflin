@@ -551,4 +551,32 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`[server] Munder Difflin server listening on ws://0.0.0.0:${PORT}`);
   console.log(`[server] HARNESS_HOME: ${HARNESS_HOME}`);
   console.log(`[server] CONFIG_FILE:  ${CONFIG_FILE}`);
+
+  // Auto-spawn the god agent (Michael) so Webex messages can be delivered
+  // immediately without waiting for a Mac client to connect and spawn it.
+  const bootCfg = readConfig();
+  if (bootCfg.onboardingComplete && bootCfg.harnessHome) {
+    const claudePath = process.env.CLAUDE_PATH ?? 'claude';
+    console.log(`[server] auto-spawning god agent (${claudePath}) in ${bootCfg.harnessHome}`);
+    const cwd = bootCfg.harnessHome as string;
+    try {
+      const p = nodePty.spawn(claudePath, [], {
+        name: 'xterm-256color',
+        cols: 100,
+        rows: 30,
+        cwd,
+        env: process.env as Record<string, string>,
+      });
+      p.onData((data) => broadcast(`pty:data:${GOD_PTY_ID}`, data));
+      p.onExit((e) => {
+        broadcast(`pty:exit:${GOD_PTY_ID}`, e);
+        ptys.delete(GOD_PTY_ID);
+        console.log('[server] god agent exited');
+      });
+      ptys.set(GOD_PTY_ID, { pty: p, id: GOD_PTY_ID, cwd, command: claudePath });
+      console.log(`[server] god agent spawned as ${GOD_PTY_ID}`);
+    } catch (err) {
+      console.error('[server] failed to auto-spawn god agent:', (err as Error).message);
+    }
+  }
 });
