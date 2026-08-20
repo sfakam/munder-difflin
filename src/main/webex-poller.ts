@@ -81,9 +81,11 @@ export class WebexPoller {
     if (this.connected) return { ok: false, error: 'already running' };
     if (!this.botToken) return { ok: false, error: 'missing bot token' };
     try {
-      const me = await this.apiFetch<{ id: string }>('/people/me');
+      const me = await this.apiFetch<{ id: string; displayName?: string }>('/people/me');
       this.botPersonId = me.id;
+      console.log(`[webex-poller] started as ${me.displayName ?? me.id} (roomFilter: ${this.roomId ?? 'all rooms'}, interval: ${this.pollIntervalMs}ms)`);
     } catch (e) {
+      console.error('[webex-poller] failed to fetch bot identity:', errMsg(e));
       return { ok: false, error: `could not fetch bot identity: ${errMsg(e)}` };
     }
     this.connected = true;
@@ -142,17 +144,24 @@ export class WebexPoller {
     const cursor = this.roomCursor.get(room.id);
     const isGroup = room.type === 'group';
 
+    console.log(`[webex-poller] polling room "${room.title}" (${room.type}) cursor=${cursor ?? 'none'}`);
+
     const result = await this.apiFetch<{ items: WebexMessage[] }>(
       `/messages?roomId=${encodeURIComponent(room.id)}&max=50`,
     );
+
+    console.log(`[webex-poller] got ${result.items.length} messages from "${room.title}"`);
 
     // Process oldest-first so the cursor advances monotonically.
     const messages = [...result.items].reverse();
     let newCursor = cursor;
 
     for (const msg of messages) {
-      if (cursor && msg.created <= cursor) continue;
+      if (cursor && msg.created <= cursor) {
+        continue;
+      }
       if (msg.personId === this.botPersonId) {
+        console.log(`[webex-poller] skipping own message ${msg.id}`);
         if (!newCursor || msg.created > newCursor) newCursor = msg.created;
         continue;
       }
@@ -166,6 +175,8 @@ export class WebexPoller {
       const isMention = isGroup
         ? (msg.mentionedPeople ?? []).includes(this.botPersonId)
         : true;
+
+      console.log(`[webex-poller] ✉ new message from ${msg.personEmail} in "${room.title}": ${text.slice(0, 80)}`);
 
       const inbound: WebexInboundMessage = {
         text,
@@ -192,29 +203,38 @@ export class WebexPoller {
         '/rooms?sortBy=lastactivity&max=100',
       );
 
+      console.log(`[webex-poller] poll tick — ${rooms.length} rooms visible (filter: ${this.roomId ?? 'all'})`);
+
       for (const room of rooms) {
         // If a specific roomId is configured, skip all others.
-        if (this.roomId && room.id !== this.roomId) continue;
+        if (this.roomId && room.id !== this.roomId) {
+          continue;
+        }
 
         const prev = this.roomActivity.get(room.id);
-        if (prev === room.lastActivity) continue;
+        if (prev === room.lastActivity) {
+          continue; // no new activity in this room
+        }
+
+        console.log(`[webex-poller] activity change in "${room.title}" (${room.type}) — prev=${prev ?? 'never'} now=${room.lastActivity}`);
 
         try {
           await this.pollRoom(room);
         } catch (err) {
           const msg = errMsg(err);
-          if (msg.includes('→ 403')) {
-            // Lost access to this room — skip it permanently this session.
+          // 403 or "Failed to get activity" = bot can't read this room; skip permanently this session
+          if (msg.includes('→ 403') || msg.includes('Failed to get activity')) {
+            console.warn(`[webex-poller] no read access to "${room.title}" (${room.id}) — skipping`);
             this.roomActivity.set(room.id, room.lastActivity);
             continue;
           }
-          console.warn('[webex-poller] pollRoom error', { roomId: room.id, err });
+          console.warn(`[webex-poller] pollRoom error for "${room.title}":`, msg);
         }
 
         this.roomActivity.set(room.id, room.lastActivity);
       }
     } catch (err) {
-      console.warn('[webex-poller] poll error', err);
+      console.warn('[webex-poller] poll error:', errMsg(err));
     }
 
     if (this.connected) {
