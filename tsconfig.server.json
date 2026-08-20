@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": false,
+    "outDir": "out/server",
+    "rootDir": "src",
+    "types": ["node"]
+  },
+  "include": ["src/server/**/*", "src/main/webex-poller.ts", "src/shared/**/*"]
+}

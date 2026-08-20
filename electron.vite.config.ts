@@ -55,7 +55,10 @@ export default defineConfig({
     define: defineMain,
     build: {
       rollupOptions: {
-        input: { index: resolve(__dirname, 'src/main/index.ts') }
+        input: {
+          index: resolve(__dirname, 'src/main/index.ts'),
+          'remote-entry': resolve(__dirname, 'src/main/remote-entry.ts'),
+        }
       }
     }
   },
